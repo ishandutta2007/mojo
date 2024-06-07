@@ -1,38 +1,98 @@
-<p align="center">
+<div align="center">
     <img src="https://modular-assets.s3.amazonaws.com/images/mojo_github_logo_bg.png">
-</p>
+
+  [Website][Mojo] | [Getting Started] | [API Documentation] | [Contributing] | [Changelog]
+</div>
+
+[Mojo]: https://www.modular.com/mojo/
+[Getting Started]: https://docs.modular.com/mojo/manual/get-started/
+[API Documentation]: https://docs.modular.com/mojo/lib
+[Contributing]: ./CONTRIBUTING.md
+[Changelog]: ./docs/changelog.md
 
 # Welcome to Mojo 🔥
 
-Mojo is a new programming language that bridges the gap between research 
-and production by combining Python syntax and ecosystem with systems 
+Mojo is a new programming language that bridges the gap between research
+and production by combining Python syntax and ecosystem with systems
 programming and metaprogramming features. Mojo is still young, but it is designed
-to become a superset of Python over time.  
+to become a superset of Python over time.
 
-[See here to get started with Mojo](https://docs.modular.com/mojo/manual/get-started/).
-Then, when you want to report issues or request features,
-[please create a GitHub issue here](https://github.com/modularml/mojo/issues).
+This repo includes source code for:
 
-This repo is the beginning of our Mojo open source effort. We've started
-with Mojo code examples and documentation, and we'll add the Mojo standard
-library as soon as we get the necessary infrastructure in place. The challenge
-is that we use Mojo pervasively inside Modular and we need to make sure that
-community contributions can proceed smoothly with good build and testing tools
-that will allow this repo to become the source of truth (right now it is not).
-We'll progressively add the necessary components, such as continuous
-integration, build tools, and more source code over time.
+- Mojo examples
+- Mojo documentation hosted at [modular.com](https://docs.modular.com/mojo/)
+- The [Mojo standard library](https://docs.modular.com/mojo/lib)
 
-If you see anything in the examples or docs that can be improved, we'd
-love to accept your contributions. Please first read to our
-[Contributor Guide](CONTRIBUTING.md).
+This repo has two primary branches:
 
-For more general questions or to chat with other Mojo developers,
-check out our [Discord](https://discord.gg/modular). 
+- The [`main`](https://github.com/modularml/mojo/tree/main) branch, which is in
+sync with the last stable released version of Mojo. Use the examples here if you’re
+using a [release build of Mojo](#latest-released).
+
+- The [`nightly`](https://github.com/modularml/mojo/tree/nightly) branch, which
+is in sync with the Mojo nightly build and subject to breakage. Use this branch
+for [contributions](./CONTRIBUTING.md), or if you're using the latest
+[nightly build of Mojo](#latest-nightly).
 
 To learn more about Mojo, see the
 [Mojo Manual](https://docs.modular.com/mojo/manual/).
 
-## Thanks To Our Contributors:
+## Installing Mojo
+
+### Latest Released
+
+To install the last released build of Mojo, you can install the MAX SDK
+or the standalone Mojo SDK:
+
+- [Get the MAX SDK](https://docs.modular.com/engine/get-started)
+- [Get the Mojo SDK](https://docs.modular.com/mojo/manual/get-started/)
+
+Then follow the docs to [write your first Mojo
+program](https://docs.modular.com/mojo/manual/get-started/hello-world).
+
+### Latest Nightly
+
+The nightly Mojo builds are subject to breakage and provide an inside
+view of how the development of Mojo is progressing.  Use at your own risk
+and be patient!
+
+To get nightly builds, see the same instructions to [install the Mojo
+SDK](https://docs.modular.com/mojo/manual/get-started/#install-mojo), but use
+the command shown there to install `nightly/mojo`.
+
+When you clone this repo, be sure you switch to the `nightly` branch, because
+the `main` branch is for stable releases and might not be compatible with
+nightly builds:
+
+```bash
+git clone https://github.com/modularml/mojo.git
+```
+
+```bash
+git checkout nightly
+```
+
+## Contributing
+
+When you want to report issues or request features, [please create a GitHub
+issue here](https://github.com/modularml/mojo/issues).
+See [here](./CONTRIBUTING.md) for guidelines on filing good bugs.
+
+We welcome contributions to this repo on the
+[`nightly`](https://github.com/modularml/mojo/tree/nightly)
+branch. If you’d like to contribute to Mojo, please first read our [Contributor
+Guide](https://github.com/modularml/mojo/blob/main/CONTRIBUTING.md).
+
+For more general questions or to chat with other Mojo developers, check out our
+[Discord](https://discord.gg/modular).
+
+## License
+
+This repository is licensed under the Apache License v2.0 with LLVM Exceptions
+(see the LLVM [License](https://llvm.org/LICENSE.txt)).
+
+## Thanks to our contributors
+
 <a href="https://github.com/modularml/mojo/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=modularml/mojo" />
 </a>

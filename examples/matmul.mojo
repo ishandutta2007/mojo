@@ -19,6 +19,7 @@ from random import rand
 import benchmark
 from algorithm import Static2DTileUnitFunc as Tile2DFunc
 from algorithm import parallelize, vectorize
+from sys import info
 from memory import memset_zero
 from python import Python
 
@@ -53,17 +54,17 @@ struct Matrix[rows: Int, cols: Int]:
         rand(data, rows * cols)
         return Self(data)
 
-    fn __getitem__(self, y: Int, x: Int) -> SIMD[type, 1]:
+    fn __getitem__(self, y: Int, x: Int) -> Scalar[type]:
         return self.load[1](y, x)
 
-    fn __setitem__(inout self, y: Int, x: Int, val: SIMD[type, 1]):
+    fn __setitem__(inout self, y: Int, x: Int, val: Scalar[type]):
         self.store[1](y, x, val)
 
     fn load[nelts: Int](self, y: Int, x: Int) -> SIMD[type, nelts]:
-        return self.data.simd_load[nelts](y * self.cols + x)
+        return self.data.load[width=nelts](y * self.cols + x)
 
     fn store[nelts: Int](self, y: Int, x: Int, val: SIMD[type, nelts]):
-        return self.data.simd_store[nelts](y * self.cols + x, val)
+        return self.data.store[width=nelts](y * self.cols + x, val)
 
 
 def run_matmul_python() -> Float64:
@@ -109,7 +110,10 @@ fn matmul_vectorized(inout C: Matrix, A: Matrix, B: Matrix):
 
 
 # Parallelize the code by using the builtin parallelize function
+# num_workers is the number of worker threads to use in parallalize
 fn matmul_parallelized(inout C: Matrix, A: Matrix, B: Matrix):
+    var num_workers = C.rows
+
     @parameter
     fn calc_row(m: Int):
         for k in range(A.cols):
@@ -122,7 +126,7 @@ fn matmul_parallelized(inout C: Matrix, A: Matrix, B: Matrix):
 
             vectorize[dot, nelts, size = C.cols]()
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 # Perform 2D tiling on the iteration space defined by end_x and end_y
@@ -133,7 +137,10 @@ fn tile[tiled_fn: Tile2DFunc, tile_x: Int, tile_y: Int](end_x: Int, end_y: Int):
 
 
 # Use the above tile function to perform tiled matmul
+# Also parallelize with num_workers threads
 fn matmul_tiled(inout C: Matrix, A: Matrix, B: Matrix):
+    var num_workers = C.rows
+
     @parameter
     fn calc_row(m: Int):
         @parameter
@@ -145,45 +152,60 @@ fn matmul_tiled(inout C: Matrix, A: Matrix, B: Matrix):
                     C.store(
                         m,
                         n + x,
-                        C.load[nelts](m, n + x) + A[m, k] * B.load[nelts](k, n + x),
+                        C.load[nelts](m, n + x)
+                        + A[m, k] * B.load[nelts](k, n + x),
                     )
 
                 vectorize[dot, nelts, size=tile_x]()
 
         tile[calc_tile, tile_n, tile_k](C.cols, B.rows)
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 # Unroll the vectorized loop by a constant factor
-fn matmul_unrolled(inout C: Matrix, A: Matrix, B: Matrix):
+# Also parallelize with num_workers threads
+fn matmul_unrolled[mode: Int](inout C: Matrix, A: Matrix, B: Matrix):
+    var num_workers: Int
+    if mode == 1:
+        num_workers = info.num_physical_cores()
+    elif mode == 2:
+        num_workers = info.num_logical_cores()
+    elif mode == 3:
+        num_workers = info.num_performance_cores()
+    else:
+        num_workers = C.rows
+
     @parameter
     fn calc_row(m: Int):
         @parameter
         fn calc_tile[tile_x: Int, tile_y: Int](x: Int, y: Int):
-            @unroll(tile_y)
-            for k in range(y, y + tile_y):
+            @parameter
+            for _k in range(tile_y):
+                var k = _k + y
 
                 @parameter
                 fn dot[nelts: Int](n: Int):
                     C.store(
                         m,
                         n + x,
-                        C.load[nelts](m, n + x) + A[m, k] * B.load[nelts](k, n + x),
+                        C.load[nelts](m, n + x)
+                        + A[m, k] * B.load[nelts](k, n + x),
                     )
 
-                alias unroll_factor = tile_x // nelts
-                vectorize[dot, nelts, tile_x, unroll_factor]()
+                vectorize[
+                    dot, nelts, size=tile_x, unroll_factor = tile_x // nelts
+                ]()
 
         tile[calc_tile, tile_n, tile_k](C.cols, B.rows)
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 @always_inline
 fn bench[
     func: fn (inout Matrix, Matrix, Matrix) -> None, name: StringLiteral
-](base_gflops: Float64, numpy_gflops: Float64) raises:
+](base_gflops: Float64) raises:
     var A = Matrix[M, K].rand()
     var B = Matrix[K, N].rand()
     var C = Matrix[M, N]()
@@ -201,12 +223,11 @@ fn bench[
 
     var gflops = ((2 * M * N * K) / secs) / 1e9
     var speedup: Float64 = gflops / base_gflops
-    var numpy_speedup: Float64 = gflops / numpy_gflops
 
     var py = Python.import_module("builtins")
     _ = py.print(
-        py.str("{:<13}{:>8.3f} GFLOPS {:>9.2f}x Python {:>5.2f}x Numpy").format(
-            name, gflops, speedup, numpy_speedup
+        py.str("{:<13}{:>8.3f} GFLOPS {:>9.2f}x Python").format(
+            name, gflops, speedup
         )
     )
 
@@ -240,8 +261,35 @@ fn test_all() raises:
         raise Error("Parallelize output does not match naive implementation")
     if not test_matrix_equal[matmul_tiled](C, A, B):
         raise Error("Tiled output does not match naive implementation")
-    if not test_matrix_equal[matmul_unrolled](C, A, B):
+    if not test_matrix_equal[matmul_unrolled[0]](C, A, B):
         raise Error("Unroll output does not match naive implementation")
+    if not test_matrix_equal[matmul_unrolled[1]](
+        C,
+        A,
+        B,
+    ):
+        raise Error(
+            "Unroll with workers as physical cores output does not match naive"
+            " implementation"
+        )
+    if not test_matrix_equal[matmul_unrolled[2]](
+        C,
+        A,
+        B,
+    ):
+        raise Error(
+            "Unroll with workers as logical cores output does not match naive"
+            " implementation"
+        )
+    if not test_matrix_equal[matmul_unrolled[3]](
+        C,
+        A,
+        B,
+    ):
+        raise Error(
+            "Unroll with workers as performance cores output does not match"
+            " naive implementation"
+        )
 
     A.data.free()
     B.data.free()
@@ -257,8 +305,17 @@ fn main() raises:
     var python_gflops = run_matmul_python()
     var numpy_gflops = run_matmul_numpy()
 
-    bench[matmul_naive, "Naive:"](python_gflops, numpy_gflops)
-    bench[matmul_vectorized, "Vectorized: "](python_gflops, numpy_gflops)
-    bench[matmul_parallelized, "Parallelized:"](python_gflops, numpy_gflops)
-    bench[matmul_tiled, "Tiled:"](python_gflops, numpy_gflops)
-    bench[matmul_unrolled, "Unrolled:"](python_gflops, numpy_gflops)
+    bench[matmul_naive, "Naive:"](python_gflops)
+    bench[matmul_vectorized, "Vectorized: "](python_gflops)
+    bench[matmul_parallelized, "Parallelized:"](python_gflops)
+    bench[matmul_tiled, "Tiled:"](python_gflops)
+    bench[matmul_unrolled[0], "Unrolled:"](python_gflops)
+    bench[matmul_unrolled[1], "Unrolled w/ workers == physical cores:"](
+        python_gflops
+    )
+    bench[matmul_unrolled[2], "Unrolled w/ workers == logical cores:"](
+        python_gflops
+    )
+    bench[matmul_unrolled[3], "Unrolled w/ workers == performance cores:"](
+        python_gflops
+    )
